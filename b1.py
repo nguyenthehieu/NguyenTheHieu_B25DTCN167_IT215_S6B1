@@ -1,5 +1,5 @@
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
+from fastapi import FastAPI, HTTPException, Query
+from pydantic import BaseModel
 
 app = FastAPI()
 courses = [
@@ -14,74 +14,84 @@ class Course(BaseModel):
     duration: int
     fee: int
 
-@app.get('/courses')
+@app.get("/courses")
 def get_course(
     keyword: str = None,
-    min_fee: int = Field(default=2000000),
-    max_fee: int = Field(default=4000000)
+    min_fee: int = Query(default=2000000),
+    max_fee: int = Query(default=4000000)
 ):
     result = courses
+
     if keyword:
         result = []
         for c in courses:
-            if keyword.lower() in c['name'].lower() or keyword.lower() in c['code'].lower():
+            if keyword.lower() in c["name"].lower() or keyword.lower() in c["code"].lower():
                 result.append(c)
-    
+
     if min_fee is not None:
-        flag = []
+        filtered = []
         for c in result:
-            if c['fee'] >= min_fee:
-                flag.append(c)
+            if c["fee"] >= min_fee:
+                filtered.append(c)
+        result = filtered
 
-        result = flag
-    
     if max_fee is not None:
+        filtered = []
         for c in result:
-            if c['fee'] >= max_fee:
-                flag.append(c)
+            if c["fee"] <= max_fee:
+                filtered.append(c)
+        result = filtered
 
-        result = flag
-            
+    return {
+        "message": "Lấy danh sách khóa học thành công",
+        "data": result
+    }
 
-@app.get('/courses/{course_id}')
-def get_detail_course(course_id:int):
-    print("giá trị id nhận về ",course_id)
-    for course in courses :
+@app.get("/courses/{course_id}")
+def get_detail_course(course_id: int):
+    for course in courses:
         if course["id"] == course_id:
             return {
-                "message" : "lấy chi tiết sinh viên thành công !",
-                "data" : course 
+                "message": "Lấy chi tiết khóa học thành công",
+                "data": course
             }
+
     raise HTTPException(
         status_code=404,
         detail="Course not found"
     )
 
-@app.post('/courses')
-def add_course(course:Course):
-    if course.name == "":
+@app.post("/courses")
+def add_course(course: Course):
+    if course.name.strip() == "":
         raise HTTPException(
             status_code=400,
-           detail="Tên không được rỗng")
+            detail="Tên không được rỗng"
+        )
 
     if course.duration <= 0:
         raise HTTPException(
             status_code=409,
-            detail="Ngày nghỉ phải lớn hơn 0")
+            detail="Duration phải lớn hơn 0"
+        )
 
     if course.fee < 0:
         raise HTTPException(
             status_code=409,
-            detail="Phí phải lớn hơn hoặc bằng 0")
+            detail="Phí phải lớn hơn hoặc bằng 0"
+        )
 
     for c in courses:
         if c["code"] == course.code:
             raise HTTPException(
-                status_code=409,        
-                detail="Code đã tồn tại")
+                status_code=409,
+                detail="Code đã tồn tại"
+            )
+
+    new_id = max([c["id"] for c in courses], default=0) + 1
 
     new_course = {
-        "id": courses[-1]['id']+1,
+        "id": new_id,
         "code": course.code,
         "name": course.name,
         "duration": course.duration,
@@ -89,17 +99,41 @@ def add_course(course:Course):
     }
 
     courses.append(new_course)
-    return new_course
+
+    return {
+        "message": "Thêm khóa học thành công",
+        "data": new_course
+    }
+
 
 @app.put("/courses/{course_id}")
 def update_course(course_id: int, updated_course: Course):
     for index, course in enumerate(courses):
         if course["id"] == course_id:
+
+            if updated_course.name.strip() == "":
+                raise HTTPException(
+                    status_code=400,
+                    detail="Tên không được rỗng"
+                )
+
+            if updated_course.duration <= 0:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Duration phải lớn hơn 0"
+                )
+
+            if updated_course.fee < 0:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Phí phải lớn hơn hoặc bằng 0"
+                )
+
             for c in courses:
                 if c["code"] == updated_course.code and c["id"] != course_id:
                     raise HTTPException(
                         status_code=409,
-                        detail="KHoá học đã tồn tại"
+                        detail="Khóa học đã tồn tại"
                     )
 
             courses[index] = {
@@ -110,11 +144,14 @@ def update_course(course_id: int, updated_course: Course):
                 "fee": updated_course.fee
             }
 
-            return courses[index]
+            return {
+                "message": "Cập nhật khóa học thành công",
+                "data": courses[index]
+            }
 
     raise HTTPException(
         status_code=404,
-        detail="Không tìm thấy khoá học"
+        detail="Không tìm thấy khóa học"
     )
 
 @app.delete("/courses/{course_id}")
@@ -123,11 +160,11 @@ def delete_course(course_id: int):
         if c["id"] == course_id:
             courses.remove(c)
             return {
-                "message": "Đã xoá thành công",
-                "course": c
+                "message": "Đã xóa thành công",
+                "data": c
             }
 
     raise HTTPException(
         status_code=404,
-        detail="KHồn tìm thấy khoá học"
+        detail="Không tìm thấy khóa học"
     )
